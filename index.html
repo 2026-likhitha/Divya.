@@ -1,0 +1,297 @@
+https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=500https://images.unsplash.com/photo-1539008835657-9e8e9680c956?w=500https://images.unsplash.com/photo-1483985988355-763728e1935b?w=500https://images.unsplash.com/photo-1583391733956-6c78276477e3?w=500
+from flask import Flask, render_template, request, redirect, session
+import sqlite3
+
+app = Flask(__name__)
+app.secret_key = "fashionhub123"
+
+def get_db():
+    return sqlite3.connect("fashion.db")
+
+def setup_database():
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            price INTEGER,
+            image TEXT
+        )
+    """)
+
+    count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+
+    if count == 0:
+        products = [
+            ("Floral Kurti", 599, "https://images.unsplash.com/photo-1583391733956-6c78276477e3?w=500"),
+            ("Casual Top", 499, "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=500"),
+            ("Stylish Dress", 899, "https://images.unsplash.com/photo-1539008835657-9e8e9680c956?w=500"),
+            ("Denim Jeans", 799, "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=500")
+        ]
+        db.executemany(
+            "INSERT INTO products (name, price, image) VALUES (?, ?, ?)",
+            products
+        )
+
+    db.commit()
+    db.close()
+
+@app.route("/")
+def home():
+    db = get_db()
+    products = db.execute("SELECT * FROM products").fetchall()
+    db.close()
+    return render_template("index.html", products=products)
+
+@app.route("/add/<int:product_id>")
+def add_to_cart(product_id):
+    cart = session.get("cart", {})
+    key = str(product_id)
+    cart[key] = cart.get(key, 0) + 1
+    session["cart"] = cart
+    return redirect("/")
+
+@app.route("/cart")
+def view_cart():
+    cart = session.get("cart", {})
+    items = []
+    total = 0
+
+    db = get_db()
+
+    for product_id, quantity in cart.items():
+        product = db.execute(
+            "SELECT * FROM products WHERE id = ?", (product_id,)
+        ).fetchone()
+
+        if product:
+            subtotal = product[2] * quantity
+            total += subtotal
+            items.append((product, quantity, subtotal))
+
+    db.close()
+    return render_template("cart.html", items=items, total=total)
+
+@app.route("/remove/<int:product_id>")
+def remove_item(product_id):
+    cart = session.get("cart", {})
+    cart.pop(str(product_id), None)
+    session["cart"] = cart
+    return redirect("/cart")
+
+@app.route("/checkout")
+def checkout():
+    session["cart"] = {}
+    return """
+    <h1>Order Placed Successfully!</h1>
+    <a href="/">Continue Shopping</a>
+    """
+
+if __name__ == "__main__":
+    setup_database()
+    app.run(debug=True)
+  
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fashion Hub</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav>
+    <h2>Fashion Hub 👗</h2>
+    <div>
+        <a href="/">Home</a>
+        <a href="/cart">Cart 🛒</a>
+    </div>
+</nav>
+
+<section class="banner">
+    <h1>Discover Your Style</h1>
+    <p>Latest Fashion Collection</p>
+    <a href="#products" class="shop-btn">Shop Now</a>
+</section>
+
+<h2 class="heading" id="products">Our Products</h2>
+
+<div class="products">
+    {% for product in products %}
+    <div class="card">
+        <img src="{{ product[3] }}" alt="{{ product[1] }}">
+        <h3>{{ product[1] }}</h3>
+        <p>₹{{ product[2] }}</p>
+        <a href="/add/{{ product[0] }}" class="btn">
+            Add to Cart
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+<footer>
+    <p>© 2026 Fashion Hub | All Rights Reserved</p>
+</footer>
+
+</body>
+          </html>
+          
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shopping Cart</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav>
+    <h2>Fashion Hub 👗</h2>
+    <a href="/">Continue Shopping</a>
+</nav>
+
+<h1 class="heading">Your Shopping Cart 🛒</h1>
+
+<div class="cart">
+    {% for product, quantity, subtotal in items %}
+    <div class="cart-item">
+        <img src="{{ product[3] }}">
+        <div>
+            <h3>{{ product[1] }}</h3>
+            <p>Price: ₹{{ product[2] }}</p>
+            <p>Quantity: {{ quantity }}</p>
+            <p>Subtotal: ₹{{ subtotal }}</p>
+            <a href="/remove/{{ product[0] }}">Remove</a>
+        </div>
+    </div>
+    {% else %}
+    <p>Your cart is empty!</p>
+    {% endfor %}
+
+    <h2>Total: ₹{{ total }}</h2>
+
+    {% if items %}
+    <a href="/checkout" class="btn">Place Order</a>
+    {% endif %}
+</div>
+
+</body>
+  </html>
+  
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #fffaf7;
+    color: #333;
+}
+
+nav {
+    background: #ffffff;
+    padding: 20px 8%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+nav h2 {
+    color: #b45c75;
+}
+
+nav a {
+    text-decoration: none;
+    color: #333;
+    margin-left: 20px;
+}
+
+.banner {
+    background: #f3dfe4;
+    text-align: center;
+    padding: 90px 20px;
+}
+
+.banner h1 {
+    font-size: 40px;
+    margin-bottom: 15px;
+}
+
+.shop-btn, .btn {
+    display: inline-block;
+    background: #b45c75;
+    color: white;
+    padding: 12px 22px;
+    text-decoration: none;
+    border-radius: 5px;
+    margin-top: 15px;
+}
+
+.heading {
+    text-align: center;
+    margin: 35px;
+}
+
+.products {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 25px;
+    padding: 20px 8%;
+}
+
+.card {
+    background: white;
+    padding: 15px;
+    text-align: center;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px #ddd;
+}
+
+.card img {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.card h3, .card p {
+    margin-top: 12px;
+}
+
+.cart {
+    padding: 20px 8%;
+}
+
+.cart-item {
+    display: flex;
+    gap: 20px;
+    background: white;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.cart-item img {
+    width: 110px;
+    height: 130px;
+    object-fit: cover;
+}
+
+footer {
+    text-align: center;
+    padding: 25px;
+    margin-top: 40px;
+    background: #f3dfe4;
+}
+
+@media(max-width: 600px) {
+    .banner h1 {
+        font-size: 28px;
+    }
+
+    nav {
+        padding: 15px;
+    }
+}
+  
